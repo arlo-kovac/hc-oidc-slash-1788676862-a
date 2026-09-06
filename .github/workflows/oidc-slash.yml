@@ -1,0 +1,33 @@
+name: oidc-slash-grammar
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: Owned environment name
+        required: true
+        type: string
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  mint:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment_name }}
+    steps:
+      - name: Print non-secret OIDC identity claims only
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, json, os, urllib.request
+          req = urllib.request.Request(
+              os.environ['ACTIONS_ID_TOKEN_REQUEST_URL'],
+              headers={'Authorization': 'Bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']},
+          )
+          with urllib.request.urlopen(req) as r:
+              jwt = json.load(r)['value']
+          body = jwt.split('.')[1]
+          body += '=' * (-len(body) % 4)
+          claims = json.loads(base64.urlsafe_b64decode(body))
+          for key in ('sub','repository','repository_id','repository_owner_id','environment'):
+              print(f'{key.upper()}={claims.get(key)}')
+          PY
